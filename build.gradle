@@ -1,0 +1,8 @@
+ext {
+    extName = 'DoujinshiOne'
+    extClass = '.DoujinshiOneFactory'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
