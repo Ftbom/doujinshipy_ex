@@ -126,7 +126,7 @@ open class DoujinshiOne(private val suffix: String = "") : ConfigurableSource, U
                     index,
                     url, // page url
                     // 储存headers信息（确保每页的imageUrl不同）
-                    index.toString() + "|$|" + json.encodeToString(doujinshiPage.data.headers),
+                    url + "|$|" + json.encodeToString(doujinshiPage.data.headers),
                 )
             }
         }
