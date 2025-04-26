@@ -14,11 +14,20 @@ data class Doujinshi(
     val cover: String,
 )
 
-// doujinshi列表结果
+// doujinshi数据
+@Serializable
+data class DoujinshiData(
+    val doujinshis: List<Doujinshi>,
+    val total: Int,
+    val page: Int,
+    val pageSize: Int,
+)
+
+// doujinshi结果列表
 @Serializable
 data class DoujinshiResult(
     val msg: String,
-    val data: List<Doujinshi>,
+    val data: DoujinshiData,
 )
 
 // doujinshi结果

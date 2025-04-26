@@ -255,7 +255,6 @@ open class DoujinshiOne(private val suffix: String = "") : ConfigurableSource, U
     // 筛选器变量
     private var groups = emptyList<Group>()
     private var sources = emptyList<String>()
-    private var maxCount = 15 // 单页最大页数，15为默认值
 
     // 筛选器类
     open class PartFilter(displayName: String, private val vals: Array<Pair<String?, String>>) :
@@ -307,10 +306,8 @@ open class DoujinshiOne(private val suffix: String = "") : ConfigurableSource, U
                     try {
                         val result = json.decodeFromString<ServerInfo>(response.body.string())
                         sources = result.sources.keys.toList()
-                        maxCount = result.info.max_num_perpage
                     } catch (e: Exception) {
                         sources = emptyList()
-                        maxCount = 15
                     }
                 },
                 { error ->
@@ -423,11 +420,15 @@ open class DoujinshiOne(private val suffix: String = "") : ConfigurableSource, U
     // 处理doujinshi结果列表
     private fun MangaParse(response: Response): MangasPage {
         val jsonResult = json.decodeFromString<DoujinshiResult>(response.body.string())
-        val doujinshis = arrayListOf<SManga>()
-        jsonResult.data.map {
-            doujinshis.add(doujinshiToSManga(it))
+        val Mangas = arrayListOf<SManga>()
+        jsonResult.data.doujinshis.map {
+            Mangas.add(doujinshiToSManga(it))
         }
-        return MangasPage(doujinshis, doujinshis.size >= maxCount)
+        var hasNext = false
+        if (jsonResult.data.total > (Math.abs(jsonResult.data.page) * jsonResult.data.pageSize)) {
+            hasNext = true
+        }
+        return MangasPage(Mangas, hasNext)
     }
 
     // 转换为doujinshi信息
@@ -469,7 +470,7 @@ open class DoujinshiOne(private val suffix: String = "") : ConfigurableSource, U
         .dns(Dns.SYSTEM)
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())
-            if (response.code == 401) throw IOException("If the server is in No-Fun Mode make sure the extension's API Key is correct.")
+            if (response.code == 401) throw IOException("make sure the extension's API Key is correct.")
             response
         }
         .build()
