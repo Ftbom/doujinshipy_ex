@@ -77,6 +77,7 @@ data class DoujinshiPageInfo(
 data class Group(
     val id: String,
     val name: String,
+    val itemCount: Int,
 )
 
 // group doujinshi列表

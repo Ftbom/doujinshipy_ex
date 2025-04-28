@@ -288,7 +288,7 @@ open class DoujinshiOne(private val suffix: String = "") : ConfigurableSource, U
             .plus(
                 groups
                     .map {
-                        Pair(it.id, it.name)
+                        Pair(it.id, it.name + "(${it.itemCount})")
                     },
             )
             .toTypedArray()
