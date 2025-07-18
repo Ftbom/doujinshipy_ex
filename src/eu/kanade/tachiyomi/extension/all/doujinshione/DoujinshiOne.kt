@@ -45,6 +45,8 @@ open class DoujinshiOne(private val suffix: String = "") : ConfigurableSource, U
 
     private val randomCount by lazy { getPrefRandomCount() } // 随机个数
 
+    private val forceImageProxy by lazy { getPrefForceImageProxy() } // 强制代理图片
+
     private val apiKey by lazy { getPrefAPIKey() } // api key
 
     private val json by lazy { Injekt.get<Json>() }
@@ -115,12 +117,27 @@ open class DoujinshiOne(private val suffix: String = "") : ConfigurableSource, U
             // 尝试解析为DoujinshiPage
             val doujinshiPage = json.decodeFromString<DoujinshiPage>(res_string)
             return doujinshiPage.data.mapIndexed { index, url ->
-                val uri = getApiUriBuilder(url).build()
+                var final_url = ""
+                if (forceImageProxy) {
+                    final_url = url.replace("/pageinfo/", "/page/")
+                } else {
+                    final_url = url
+                }
+                val uri = getApiUriBuilder(final_url).build()
                 Page(index, uri.toString(), uri.toString())
             }
         } catch (e: Exception) {
             // 如果失败，则尝试解析为 DoujinshiPage2
             val doujinshiPage = json.decodeFromString<DoujinshiPage2>(res_string)
+            try {
+                if (forceImageProxy) {
+                    val doujinshiId = Regex("""/doujinshi/([\w-]+)/pages""").find(response.request.url.toString())?.groupValues?.get(1)
+                    return doujinshiPage.data.urls.mapIndexed { index, url ->
+                        val uri = getApiUriBuilder("/doujinshi/$doujinshiId/page/$index").build()
+                        Page(index, uri.toString(), uri.toString())
+                    }
+                }
+            } catch (e: Exception) { }
             return doujinshiPage.data.urls.mapIndexed { index, url ->
                 Page(
                     index,
@@ -182,7 +199,7 @@ open class DoujinshiOne(private val suffix: String = "") : ConfigurableSource, U
 
     // 结果处理
     override fun popularMangaParse(response: Response): MangasPage {
-        return MangasPage(MangaParse(response).mangas, false)
+        return MangaParse(response)
     }
 
     // //////////////////////////////
@@ -208,22 +225,36 @@ open class DoujinshiOne(private val suffix: String = "") : ConfigurableSource, U
     // url和headers
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val uri = getApiUriBuilder("/search")
+        val random_uri = getApiUriBuilder("/doujinshi/random")
+        var is_random = false
         // 筛选器
         filters.forEach { filter ->
             when (filter) {
                 is SortSelect -> {
-                    if (filter.toPart() == "1") {
+                    if (filter.toPart() == "0") {
+                        uri.appendQueryParameter("page", (-page).toString())
+                    } else if (filter.toPart() == "1") {
                         uri.appendQueryParameter("page", page.toString())
                     } else {
-                        uri.appendQueryParameter("page", (-page).toString())
+                        is_random = true
                     }
                 }
                 is SourceSelect -> uri.appendQueryParameter("source_name", filter.toPart())
-                is GroupSelect -> uri.appendQueryParameter("group", filter.toPart())
+                is GroupSelect -> {
+                    if (is_random) {
+                        random_uri.appendQueryParameter("group", filter.toPart())
+                        random_uri.appendQueryParameter("num", randomCount.toString())
+                    } else {
+                        uri.appendQueryParameter("group", filter.toPart())
+                    }
+                }
                 else -> {}
             }
         }
         uri.appendQueryParameter("query", query)
+        if (is_random) {
+            return GET(random_uri.toString(), headers, CacheControl.FORCE_NETWORK)
+        }
         return GET(uri.toString(), headers, CacheControl.FORCE_NETWORK)
     }
 
@@ -247,7 +278,7 @@ open class DoujinshiOne(private val suffix: String = "") : ConfigurableSource, U
 
     // filter
     override fun getFilterList() = FilterList(
-        SortSelect(listOf(Pair("0", "Descending"), Pair("1", "Ascending")).toTypedArray()),
+        SortSelect(listOf(Pair("0", "Descending"), Pair("1", "Ascending"), Pair("2", "Random")).toTypedArray()),
         SourceSelect(getSourcePairs(sources)),
         GroupSelect(getGroupPairs(groups)),
     )
@@ -348,6 +379,7 @@ open class DoujinshiOne(private val suffix: String = "") : ConfigurableSource, U
     private fun getPrefAPIKey(): String = preferences.getString(APIKEY_KEY, APIKEY_DEFAULT)!!
     private fun getPrefRandomCount(): Int = preferences.getString(RANDOM_COUNT, RANDOMCOUNT_DEFAULT)!!.toInt()
     private fun getPrefCustomLabel(): String = preferences.getString(CUSTOM_LABEL_KEY, suffix)!!.ifBlank { suffix }
+    private fun getPrefForceImageProxy(): Boolean = preferences.getBoolean(FORCE_IMAGE_PROXY_KEY, false)!!
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
         if (suffix == "") { // 若是第一个默认实例
@@ -371,9 +403,30 @@ open class DoujinshiOne(private val suffix: String = "") : ConfigurableSource, U
             }.also(screen::addPreference)
         }
         screen.addPreference(screen.editTextPreference(HOSTNAME_KEY, "Hostname", HOSTNAME_DEFAULT, baseUrl, refreshSummary = true))
-        screen.addPreference(screen.editTextPreference(APIKEY_KEY, "API Key", "", "Required to access the server.", true))
+        screen.addPreference(screen.editTextPreference(APIKEY_KEY, "API Key", "demo", "Required to access the server.", true))
         screen.addPreference(screen.editTextPreference(RANDOM_COUNT, "Random count", RANDOMCOUNT_DEFAULT, "Count of doujinshis in random results", false, true))
         screen.addPreference(screen.editTextPreference(CUSTOM_LABEL_KEY, "Custom Label", "", "Show the given label for the source instead of the default."))
+        screen.addPreference(screen.switchPreference(FORCE_IMAGE_PROXY_KEY, "Force Image Proxy", false, "Enable this to force all image requests through server proxy."))
+    }
+
+    private fun androidx.preference.PreferenceScreen.switchPreference(key: String, title: String, defaultValue: Boolean, summary: String): androidx.preference.SwitchPreferenceCompat {
+        return androidx.preference.SwitchPreferenceCompat(context).apply {
+            this.key = key
+            this.title = title
+            this.summary = summary
+            this.setDefaultValue(defaultValue)
+
+            setOnPreferenceChangeListener { _, newValue ->
+                try {
+                    preferences.edit().putBoolean(this.key, newValue as Boolean).commit()
+                    Toast.makeText(context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
+                    true
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    false
+                }
+            }
+        }
     }
 
     // 编辑框
@@ -425,8 +478,10 @@ open class DoujinshiOne(private val suffix: String = "") : ConfigurableSource, U
             Mangas.add(doujinshiToSManga(it))
         }
         var hasNext = false
-        if (jsonResult.data.total > (Math.abs(jsonResult.data.page) * jsonResult.data.pageSize)) {
-            hasNext = true
+        if (jsonResult.data.page != 0) {
+            if (jsonResult.data.total > (Math.abs(jsonResult.data.page) * jsonResult.data.pageSize)) {
+                hasNext = true
+            }
         }
         return MangasPage(Mangas, hasNext)
     }
@@ -497,5 +552,6 @@ open class DoujinshiOne(private val suffix: String = "") : ConfigurableSource, U
         private const val RANDOM_COUNT = "randomcount"
         private const val RANDOMCOUNT_DEFAULT = "5"
         private const val CUSTOM_LABEL_KEY = "customLabel"
+        private const val FORCE_IMAGE_PROXY_KEY = "forceimageproxy"
     }
 }
