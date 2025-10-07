@@ -4,7 +4,7 @@ class DoujinshiOne extends ComicSource {
     key = "doujinshione"
     version = "1.0.0"
     minAppVersion = "1.4.0"
-    url = "https://git.nyne.dev/nyne/venera-configs/raw/branch/main/lanraragi.js"
+    url = "https://raw.githubusercontent.com/Ftbom/doujinshipy_ex/main/venera/doujinshione.js"
 
     settings = {
         domain: { title: "域名", type: "input", default: "http://127.0.0.1:9000" },
