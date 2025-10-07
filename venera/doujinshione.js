@@ -127,7 +127,7 @@ class DoujinshiOne extends ComicSource {
 
     explore = [
         {
-            title: "随机",
+            title: "DoujinshiOne",
             type: "multiPageComicList",
             load: async () => {
                 // 获取随机数目
@@ -149,7 +149,7 @@ class DoujinshiOne extends ComicSource {
     ]
 
     category = {
-        title: "分类",
+        title: "DoujinshiOne",
         parts: [
             {
                 name: "分组",
