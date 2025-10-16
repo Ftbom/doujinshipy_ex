@@ -77,40 +77,38 @@ class DoujinshiOne extends ComicSource {
         this.deleteData("inited"); // 删除初始化标志位
     }
 
-    async initInfo(loadingNum = null) {
+    async initInfo() {
         // 防止重复加载
         let inited = this.loadData("inited");
         if (inited == "false") {
             inited = false;
         }
-        if (!inited) {
-            try {
-                // 储存源信息
-                const res = await Network.get(this.baseUrl, this.headers);
-                if (res.status != 200) {
-                    this.saveData('sources', []);
-                } else {
-                    let data = [this.translate("all")];
-                    try {
-                        const result = JSON.parse(res.body);
-                        for (let source in result.sources) {
-                            data.push(source);
-                        }
-                    } catch (_) {
-                        data = [];
-                    }
-                    this.saveData('sources', data);
-                }
-            } catch (_) {
+        if (inited) {
+            return;
+        }
+        try {
+            // 储存源信息
+            const res = await Network.get(this.baseUrl, this.headers);
+            if (res.status != 200) {
                 this.saveData('sources', []);
-            }
-            await this.updateGroups();
-            // 标记初始化完成
-            this.saveData("inited", true);
+            } else {
+                let data = [this.translate("all")];
+                try {
+                    const result = JSON.parse(res.body);
+                    for (let source in result.sources) {
+                        data.push(source);
+                    }
+                } catch (_) {
+                     data = [];
+                }
+                this.saveData('sources', data);
+             }
+        } catch (_) {
+            this.saveData('sources', []);
         }
-        if (loadingNum != null) {
-            UI.cancelLoading(loadingNum); // UI回调
-        }
+        await this.updateGroups();
+        // 标记初始化完成
+        this.saveData("inited", true);
     }
 
     // 提取doujinshi信息
@@ -190,7 +188,7 @@ class DoujinshiOne extends ComicSource {
                 name: "Sources",
                 type: "dynamic",
                 loader: () => {
-                    this.initInfo(UI.showLoading(null)); // 等待加载初始化信息，使用UI进行线程阻滞
+                    this.initInfo(); // 加载初始化信息
                     const data = this.loadData('sources');
                     const items = [];
                     for (const s of data) {
