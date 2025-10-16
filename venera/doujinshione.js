@@ -74,6 +74,17 @@ class DoujinshiOne extends ComicSource {
     }
 
     async init() {
+        this.deleteData("inited");
+    }
+
+    async initInfo(loadingNum = null) {
+        let inited = this.loadData("inited");
+        if (inited == "false") {
+            inited = false;
+        }
+        if (inited) {
+            return;
+        }
         try {
             // 储存源信息
             const res = await Network.get(this.baseUrl, this.headers);
@@ -95,6 +106,10 @@ class DoujinshiOne extends ComicSource {
             this.saveData('sources', []);
         }
         await this.updateGroups();
+        this.saveData("inited", true);
+        if (loadingNum != null) {
+            UI.cancelLoading(loadingNum);
+        }
     }
 
     // 提取doujinshi信息
@@ -129,6 +144,7 @@ class DoujinshiOne extends ComicSource {
             title: "DoujinshiOne",
             type: "mixed",
             load: async (page) => {
+                await this.initInfo();
                 const data = [];
                 if (page == 1) {
                     // 获取随机数目
@@ -172,6 +188,7 @@ class DoujinshiOne extends ComicSource {
                 name: "Sources",
                 type: "dynamic",
                 loader: () => {
+                    this.initInfo(UI.showLoading(null));
                     const data = this.loadData('sources');
                     const items = [];
                     for (const s of data) {
@@ -289,6 +306,7 @@ class DoujinshiOne extends ComicSource {
 
     search = {
         load: async (keyword, options, page) => {
+            await this.initInfo();
             if (keyword.search(":") != -1) {
                 // 处理搜索关键词
                 const searchKeys = keyword.match(/(?:\w+:'[^']+'|\w+:[^\s']+|[^\s']+)/g);
@@ -348,6 +366,7 @@ class DoujinshiOne extends ComicSource {
             return 'ok';
         },
         loadFolders: async (comicId) => {
+            await this.initInfo();
             const groups = this.loadData('groups_');
             if (comicId == null) {
                 return {folders: groups, favorited: []}; // 获取所有分组
@@ -420,6 +439,7 @@ class DoujinshiOne extends ComicSource {
 
     comic = {
         loadInfo: async (id) => {
+            await this.initInfo();
             // 获取doujinshi信息
             const res = await Network.get(`${this.baseUrl}/doujinshi/${id}/metadata`, this.headers)
             const result = JSON.parse(res.body);
