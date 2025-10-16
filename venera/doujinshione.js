@@ -1,15 +1,14 @@
-/** @type {import('./_venera_.js')} */
 class DoujinshiOne extends ComicSource {
     name = "DoujinshiOne"
     key = "doujinshione"
-    version = "1.0.0"
+    version = "1.0.1"
     minAppVersion = "1.4.0"
     url = "https://raw.githubusercontent.com/Ftbom/doujinshipy_ex/main/venera/doujinshione.js"
 
     settings = {
-        domain: { title: "域名", type: "input", default: "http://127.0.0.1:9000" },
-        randomCount: { title: "随机项数目", type: "input", default: "6" },
-        fImgProxy: { title: "强制服务器代理图片", type: "switch", default: false }
+        domain: { title: "domain", type: "input", default: "http://127.0.0.1:9000" },
+        randomCount: { title: "random_number", type: "input", default: "6" },
+        fImgProxy: { title: "force_proxy_image", type: "switch", default: false }
     }
 
     get baseUrl() {
@@ -20,7 +19,7 @@ class DoujinshiOne extends ComicSource {
     get headers() {
         const token = this.loadData('token');
         if ((token == "") || (token == null)) {
-            throw "请使用TOKEN登录"; // token提示
+            throw this.translate("need_token"); // token提示
         }
         const apiKey = "Bearer " + token;
         return {
@@ -81,7 +80,7 @@ class DoujinshiOne extends ComicSource {
             if (res.status != 200) {
                 this.saveData('sources', []);
             } else {
-                let data = [];
+                let data = [this.translate("all")];
                 try {
                     const result = JSON.parse(res.body);
                     for (let source in result.sources) {
@@ -128,22 +127,40 @@ class DoujinshiOne extends ComicSource {
     explore = [
         {
             title: "DoujinshiOne",
-            type: "multiPageComicList",
-            load: async () => {
-                // 获取随机数目
-                let randomNum = 6;
-                try {
-                    randomNum = parseInt(this.loadSetting('randomCount'));
-                } catch (_) {
-                    randomNum = 6;
+            type: "mixed",
+            load: async (page) => {
+                const data = [];
+                if (page == 1) {
+                    // 获取随机数目
+                    let randomNum = 6;
+                    try {
+                        randomNum = parseInt(this.loadSetting('randomCount'));
+                    } catch (_) {
+                        randomNum = 6;
+                    }
+                    // 随机
+                    const random_res = await Network.get(`${this.baseUrl}/doujinshi/random?num=${randomNum}`, this.headers);
+                    const random_result = JSON.parse(random_res.body);
+                    if (random_res.status != 200) {
+                        throw random_result.error;
+                    }
+                    const random_doujinshis = this.parseDoujinshis(random_result.data).comics;
+                    data.push({
+                        title: this.translate("random"),
+                        comics: random_doujinshis
+                    });
                 }
-                // 随机
-                const res = await Network.get(`${this.baseUrl}/doujinshi/random?num=${randomNum}`, this.headers);
+                const res = await Network.get(`${this.baseUrl}/doujinshi?page=-${page}`, this.headers);
                 const result = JSON.parse(res.body);
                 if (res.status != 200) {
                     throw result.error;
                 }
-                return this.parseDoujinshis(result.data);
+                const doujinshis = this.parseDoujinshis(result.data);
+                data.push(doujinshis.comics);
+                return {
+                    data: data,
+                    maxPage: doujinshis.maxPage + 1
+                };
             }
         }
     ]
@@ -152,32 +169,11 @@ class DoujinshiOne extends ComicSource {
         title: "DoujinshiOne",
         parts: [
             {
-                name: "分组",
+                name: "Sources",
                 type: "dynamic",
                 loader: () => {
-                    const data = this.loadData('groups')
-                    const items = []
-                    for (const g in data) {
-                        items.push({
-                            label: g,
-                            target: {
-                                page: 'category',
-                                attributes: {
-                                    category: g,
-                                    param: "group"
-                                }
-                            }
-                        })
-                    }
-                    return items
-                }
-            },
-            {
-                name: "源",
-                type: "dynamic",
-                loader: () => {
-                    const data = this.loadData('sources')
-                    const items = []
+                    const data = this.loadData('sources');
+                    const items = [];
                     for (const s of data) {
                         items.push({
                             label: s,
@@ -188,9 +184,30 @@ class DoujinshiOne extends ComicSource {
                                     param: "source_name"
                                 }
                             }
-                        })
+                        });
                     }
-                    return items
+                    return items;
+                }
+            },
+            {
+                name: "Groups",
+                type: "dynamic",
+                loader: () => {
+                    const data = this.loadData('groups');
+                    const items = [];
+                    for (const g in data) {
+                        items.push({
+                            label: g,
+                            target: {
+                                page: 'category',
+                                attributes: {
+                                    category: g,
+                                    param: "group"
+                                }
+                            }
+                        });
+                    }
+                    return items;
                 }
             },
         ],
@@ -234,6 +251,9 @@ class DoujinshiOne extends ComicSource {
                 url = `${this.baseUrl}/doujinshi/random?num=${randomNum}&${random_str}`;
             } else {
                 // 正常
+                if (category == this.translate("all")) {
+                    category = "";
+                }
                 url = `${this.baseUrl}/search?query=&${param}=${category}&page=${sort * page}`;
             }
             const res = await Network.get(url, this.headers);
@@ -244,13 +264,13 @@ class DoujinshiOne extends ComicSource {
             return this.parseDoujinshis(result.data);
         },
         optionLoader: async (category, param) => {
-            if (param == "group") {
+            if ((param == "group") || (category == this.translate("all"))) {
                 return [
                     {
                         options: [
-                            "1-正序",
-                            "2-倒序",
-                            "3-随机"
+                            "1-asc",
+                            "2-desc",
+                            "3-random"
                         ]
                     }
                 ]
@@ -258,8 +278,8 @@ class DoujinshiOne extends ComicSource {
                 return [
                     {
                         options: [
-                            "1-正序",
-                            "2-倒序"
+                            "1-asc",
+                            "2-desc"
                         ]
                     }
                 ]
@@ -292,10 +312,10 @@ class DoujinshiOne extends ComicSource {
         optionList: [
             {
                 options: [
-                    "1-正序",
-                    "2-倒序"
+                    "1-asc",
+                    "2-desc"
                 ],
-                label: "排序"
+                label: "sort"
             }
         ],
         enableTagsSuggestions: true,
@@ -386,23 +406,10 @@ class DoujinshiOne extends ComicSource {
         singleFolderForSingleComic: false
     }
 
-    // 转换tag
-    transTag(tag_map, type, value) {
-        const tag_type_name = {category: "类别", female: "女性", male: "男性", mixed: "混合",
-            other: "其他", group: "团队", artist: "艺术家", cosplayer: "Coser", parody: "原作",
-            character: "角色", language: "语言"};
-        const doujinshi_type_name = {doujinshi: "同人志", manga: "漫画", artistcg: "画师CG",
-            gamecg: "游戏CG", "non-h": "无H", imageset: "图集", western: "西方", cosplay: "Cosplay",
-            misc: "杂项", asianporn: "亚洲色情"};
+    // 添加tag
+    pushTag(tag_map, type, value) {
         if (type == "category") {
-            if (value in doujinshi_type_name) {
-                value = doujinshi_type_name[value];
-            }
-        }
-        if (type in tag_type_name) {
-            type = tag_type_name[type];
-        } else {
-            type = "未知";
+            value = this.translate(value); // 转换类别tag
         }
         if (type in tag_map) {
             tag_map[type].push(value);
@@ -420,14 +427,14 @@ class DoujinshiOne extends ComicSource {
                 throw result.error;
             }
             const data = result.data;
-            let tags = {"源": [data.source], "分组": data.groups};
+            let tags = {"doujinshi_source": [data.source], "doujinshi_group": data.groups};
             for (let tag of data.tags) {
                 const tag_s = tag.split(":");
                 if (tag_s.length == 1) {
-                    this.transTag(tags, "未知", tag_s[0].trim());
+                    this.pushTag(tags, "unknown", tag_s[0].trim());
                     continue;
                 }
-                this.transTag(tags, tag_s[0].trim(), tag_s[1].trim())
+                this.pushTag(tags, tag_s[0].trim(), tag_s[1].trim())
             }
             return new ComicDetails({
                 id: data.id,
@@ -500,36 +507,32 @@ class DoujinshiOne extends ComicSource {
             }
         },
         onClickTag: (namespace, tag) => {
-            let tag_str = "";
-            const trans1 = {"同人志": "doujinshi", "漫画": "manga", "画师CG": "artistcg",
-                "游戏CG": "gamecg", "无H": "non-h", "图集": "imageset", "西方": "western", "Cosplay": "cosplay",
-                "杂项": "misc", "亚洲色情": "asianporn"};
-            if (tag in trans1) {
-                tag = trans1[tag];
-            }
-            const trans2 = {"类别": "category", "女性": "female", "男性": "male", "混合": "mixed",
-                "其他": "other", "团队": "group", "艺术家": "artist", "Coser": "cosplayer", "原作": "parody",
-                "角色": "character", "语言": "language"};
-            if (namespace in trans2) {
-                tag_str = `${trans2[namespace]}:${tag}`;
-            } else {
-                if ("分组" == namespace) {
-                    return {
-                        // 转到分组
-                        action: 'category',
-                        keyword: tag,
-                        param: "group",
-                    };
-                } else if ("源" == namespace) {
-                    return {
-                        // 转到源
-                        action: 'category',
-                        keyword: tag,
-                        param: "source_name",
-                    };
-                } else {
-                    tag_str = tag;
+            if (namespace == "category") {
+                const locale = APP.locale;
+                if (locale in this.translation) {
+                    tag = Object.keys(this.translation[locale])
+                    .filter(k => this.translation[locale][k] == tag);
                 }
+            }
+            let tag_str = "";
+            if ("doujinshi_group" == namespace) {
+                return {
+                    // 转到分组
+                    action: 'category',
+                    keyword: tag,
+                    param: "group",
+                };
+            } else if ("doujinshi_source" == namespace) {
+                return {
+                    // 转到源
+                    action: 'category',
+                    keyword: tag,
+                    param: "source_name",
+                };
+            } else if ("unknown" == namespace) {
+                tag_str = tag;
+            } else {
+                tag_str = `${namespace}:${tag}`;
             }
             return {
                 // 转到tag搜索
@@ -539,5 +542,114 @@ class DoujinshiOne extends ComicSource {
             }
         },
         enableTagsTranslate: true,
+    }
+    
+    translation = {
+        'zh_CN': {
+            "domain": "域名",
+            "random_number": "随机项数目",
+            "force_proxy_image": "强制服务器代理图片",
+            "need_token": "请使用TOKEN登录",
+            "doujinshi_group": "分组",
+            "doujinshi_source": "源",
+            "asc": "正序",
+            "desc": "倒序",
+            "random": "随机",
+            "all": "全部",
+            "sort": "排序",
+            "language": "语言",
+            "artist": "画师",
+            "male": "男性",
+            "female": "女性",
+            "mixed": "混合",
+            "other": "其它",
+            "parody": "原作",
+            "character": "角色",
+            "group": "团队",
+            "cosplayer": "Coser",
+            "category": "类别",
+            "unknown": "未知",
+            "doujinshi": "同人志",
+            "manga": "漫画",
+            "artistcg": "画师CG",
+            "gamecg": "游戏CG",
+            "non-h": "无H",
+            "imageset": "图集",
+            "western": "西方",
+            "cosplay": "Cosplay",
+            "misc": "杂项",
+            "asianporn": "亚洲色情"
+        },
+        'zh_TW': {
+            "domain": "域名",
+            "random_number": "隨機項數目",
+            "force_proxy_image": "強制服務器代理圖片",
+            "need_token": "請使用TOKEN登錄",
+            "doujinshi_group": "分組",
+            "doujinshi_source": "源",
+            "asc": "正序",
+            "desc": "倒序",
+            "random": "隨機",
+            "all": "全部",
+            "sort": "排序",
+            "language": "語言",
+            "artist": "畫師",
+            "male": "男性",
+            "female": "女性",
+            "mixed": "混合",
+            "other": "其他",
+            "parody": "原作",
+            "character": "角色",
+            "group": "團隊",
+            "cosplayer": "Coser",
+            "category": "類別",
+            "unknown": "未知",
+            "doujinshi": "同人誌",
+            "manga": "漫畫",
+            "artistcg": "畫師CG",
+            "gamecg": "遊戲CG",
+            "non-h": "無H",
+            "imageset": "圖集",
+            "western": "西方",
+            "cosplay": "Cosplay",
+            "misc": "雜項",
+            "asianporn": "亞洲色情"
+        },
+        'en_US': {
+            "domain": "Domain",
+            "random_number": "Number of random items",
+            "force_proxy_image": "Force server to proxy images",
+            "need_token": "Please log in using TOKEN",
+            "doujinshi_group": "Group",
+            "doujinshi_source": "Source",
+            "asc": "Ascending",
+            "desc": "Descending",
+            "random": "Random",
+            "all": "All",
+            "sort": "Sort",
+            "language": "Language",
+            "artist": "Artist",
+            "male": "Male",
+            "female": "Female",
+            "mixed": "Mixed",
+            "other": "Other",
+            "parody": "Parody",
+            "character": "Character",
+            "group": "Group",
+            "cosplayer": "Coser",
+            "category": "Category",
+            "unknown": "Unknown",
+            "doujinshi": "Doujinshi",
+            "manga": "Manga",
+            "artistcg": "Artist CG",
+            "gamecg": "Game CG",
+            "non-h": "Non-H",
+            "imageset": "Image Set",
+            "western": "Western",
+            "cosplay": "Cosplay",
+            "misc": "Misc",
+            "asianporn": "Asian Porn"
+        }
+
     }
 }
