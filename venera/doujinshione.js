@@ -1,7 +1,7 @@
 class DoujinshiOne extends ComicSource {
     name = "DoujinshiOne"
     key = "doujinshione"
-    version = "1.0.1"
+    version = "1.0.2"
     minAppVersion = "1.4.0"
     url = "https://raw.githubusercontent.com/Ftbom/doujinshipy_ex/main/venera/doujinshione.js"
 
@@ -74,10 +74,11 @@ class DoujinshiOne extends ComicSource {
     }
 
     async init() {
-        this.deleteData("inited");
+        this.deleteData("inited"); // 删除初始化标志位
     }
 
     async initInfo(loadingNum = null) {
+        // 防止重复加载
         let inited = this.loadData("inited");
         if (inited == "false") {
             inited = false;
@@ -106,9 +107,10 @@ class DoujinshiOne extends ComicSource {
             this.saveData('sources', []);
         }
         await this.updateGroups();
+        // 标记初始化完成
         this.saveData("inited", true);
         if (loadingNum != null) {
-            UI.cancelLoading(loadingNum);
+            UI.cancelLoading(loadingNum); // UI回调
         }
     }
 
@@ -162,6 +164,7 @@ class DoujinshiOne extends ComicSource {
                     }
                     const random_doujinshis = this.parseDoujinshis(random_result.data).comics;
                     data.push({
+                        // 随机页
                         title: this.translate("random"),
                         comics: random_doujinshis
                     });
@@ -172,7 +175,7 @@ class DoujinshiOne extends ComicSource {
                     throw result.error;
                 }
                 const doujinshis = this.parseDoujinshis(result.data);
-                data.push(doujinshis.comics);
+                data.push(doujinshis.comics); //最新页
                 return {
                     data: data,
                     maxPage: doujinshis.maxPage + 1
@@ -188,7 +191,7 @@ class DoujinshiOne extends ComicSource {
                 name: "Sources",
                 type: "dynamic",
                 loader: () => {
-                    this.initInfo(UI.showLoading(null));
+                    this.initInfo(UI.showLoading(null)); // 等待加载初始化信息，使用UI进行线程阻滞
                     const data = this.loadData('sources');
                     const items = [];
                     for (const s of data) {
@@ -428,7 +431,7 @@ class DoujinshiOne extends ComicSource {
     // 添加tag
     pushTag(tag_map, type, value) {
         if (type == "category") {
-            value = this.translate(value); // 转换类别tag
+            value = this.translate(value); // 转换类别tag（翻译）
         }
         if (type in tag_map) {
             tag_map[type].push(value);
@@ -530,6 +533,7 @@ class DoujinshiOne extends ComicSource {
             if (namespace == "category") {
                 const locale = APP.locale;
                 if (locale in this.translation) {
+                    // 对应translation字典
                     tag = Object.keys(this.translation[locale])
                     .filter(k => this.translation[locale][k] == tag);
                 }
